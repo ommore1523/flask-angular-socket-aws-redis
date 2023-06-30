@@ -1,0 +1,35 @@
+---------------------------------------------------------------------------------------------------------
+
+CloudFormation outputs from deployed stack
+-----------------------------------------------------------------------------------------------------------
+Outputs                                                                                                   
+-----------------------------------------------------------------------------------------------------------
+Key                 SendMessageFunctionArn                                                                
+Description         Send Message Function ARN                                                             
+Value               arn:aws:lambda:us-east-1:942772672361:function:WebSocketApp-SendMessageFunction-gqFPcj3jYm47                                                                        
+
+Key                 OnConnectFunctionArn                                                                  
+Description         On Connect function ARN                                                               
+Value               arn:aws:lambda:us-east-1:942772672361:function:WebSocketApp-OnConnectFunction-        
+IRBP3T52YWT4                                                                                              
+
+Key                 WebSocketURI                                                                          
+Description         The WSS protocol to connect to                                                        
+Value               wss://qouzof3zmf.execute-api.us-east-1.amazonaws.com/Prod                             
+
+Key                 OnDisconnectFunctionArn                                                               
+Description         On Disconnect function ARN                                                            
+Value               arn:aws:lambda:us-east-1:942772672361:function:WebSocketApp-OnDisconnectFunction-     
+YJ6TXD9FWXJD                                                                                              
+-----------------------------------------------------------------------------------------------------------
+
+
+
+VpcConfig:
+  SecurityGroupIds:
+    - sg-05f412744f6d39494
+    #- sg-0497543df42482ddc
+  SubnetIds:
+    - subnet-0b36b11a4ee6d0f4a
+    #- subnet-0d8aeb296cb411f0c
+    #- subnet-0f59f12584fa869d0

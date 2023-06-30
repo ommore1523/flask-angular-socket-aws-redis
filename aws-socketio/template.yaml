@@ -1,0 +1,273 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  socketio
+
+  Sample SAM Template for socketio
+
+
+#! TODO: add lambda function config and other access for execution
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 30
+    Runtime: python3.8
+    # VpcConfig:
+    #   SecurityGroupIds:
+    #     - sg-05f412744f6d39494
+    #     #- sg-0497543df42482ddc
+    #   SubnetIds:
+    #     - subnet-0b36b11a4ee6d0f4a
+    #     #- subnet-0d8aeb296cb411f0c
+    #     #- subnet-0f59f12584fa869d0
+  Api:
+    Cors:
+      AllowMethods: "'OPTIONS,POST,GET,PUT,DELETE'"
+      AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+      AllowOrigin: "'*'"
+    
+
+Resources:
+
+  GetConnectionIdFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: socket_connection/
+      Handler: connection.get_id
+      
+
+  SocketIOApp:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: SocketIOApp
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: $request.body.action
+  
+  ConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref SocketIOApp
+      RouteKey: $connect
+      AuthorizationType: NONE
+      OperationName: ConnectRoute
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref ConnectInteg
+
+  ConnectInteg:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref SocketIOApp
+      Description: Connect Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub:
+          arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnConnectFunction.Arn}/invocations
+  
+  DisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref SocketIOApp
+      RouteKey: $disconnect
+      AuthorizationType: NONE
+      OperationName: DisconnectRoute
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref DisconnectInteg
+
+  DisconnectInteg:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref SocketIOApp
+      Description: Disconnect Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub:
+          arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnDisconnectFunction.Arn}/invocations
+  
+  SendRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref SocketIOApp
+      RouteKey: sendmessage
+      AuthorizationType: NONE
+      OperationName: SendRoute
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref SendInteg
+
+  SendInteg:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref SocketIOApp
+      Description: Send message route Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub:
+          arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SendMessageFunction.Arn}/invocations
+
+  # DefaultRoute:
+  #   Type: AWS::ApiGatewayV2::Route
+  #   Properties:
+  #     ApiId: !Ref SocketIOApp
+  #     RouteKey: $default
+  #     AutorizationType: NONE
+  #     OperationName: DefaultRoute
+  #     Target: !Join
+  #       - '/'
+  #       - - 'integrations'
+  #         - !Ref DefaultInteg
+  
+  # DefaultInteg:
+  #   Type: AWS::ApiGatewayV2::Integration
+  #   Properties:
+  #     ApiId: !Ref SocketIOApp
+  #     Description: Default route Integration
+  #     IntegrationType: AWS_PROXY
+  #     IntegrationUri:
+  #       Fn::Sub:
+  #         arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnDefaultFunction.Arn}/invocations
+
+  Deployment:
+    Type: AWS::ApiGatewayV2::Deployment
+    DependsOn:
+      - ConnectRoute
+      - DisconnectRoute
+      - SendRoute
+    Properties:
+      ApiId: !Ref SocketIOApp
+
+  Stage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      StageName: Prod
+      Description: Prod stage
+      DeploymentId: !Ref Deployment
+      ApiId: !Ref SocketIOApp
+
+  OnConnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: app/
+      Handler: handler.connect.handle
+
+  OnConnectPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - SocketIOApp
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref OnConnectFunction
+      Principal: apigateway.amazonaws.com
+
+  OnDisconnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: app/
+      Handler: handler.disconnect.handle
+  
+  OnDisconnectPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - SocketIOApp
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref OnDisconnectFunction
+      Principal: apigateway.amazonaws.com
+
+  SendMessageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: app/
+      Handler: handler.sendmessage.handle
+      Environment:
+        Variables:
+          apiEndpoint: 'https://qouzof3zmf.execute-api.us-east-1.amazonaws.com/Prod' 
+      Policies:
+        - LambdaInvokePolicy:
+            Effect: "Allow"
+            Action: "lambda:InvokeFunction"
+            Resources:
+              Fn::Sub:
+                !Sub GetConnectionIdFunction
+            FunctionName: !Ref GetConnectionIdFunction
+  
+  SendMessagePermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - SocketIOApp
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref SendMessageFunction
+      Principal: apigateway.amazonaws.com
+
+  # OnDefaultFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     CodeUri: app/
+  #     Handler: handler.default.handle
+  
+  # OnDefaultPermission:
+  #   Type: AWS::Lambda::Permission
+  #   DependsOn:
+  #     - SocketIOApp
+  #   Properties:
+  #     Action: lambda:InvokeFunction
+  #     FunctionName: !Ref OnDefaultFunction
+  #     Principal: apigateway.amazonaws.com
+
+
+  # SocketIOFunction:
+  #   Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+  #   Properties:
+  #     CodeUri: app/
+  #     Handler: app.lambda_handler
+  #     Runtime: python3.6
+  #     Events:
+  #       HelloWorld:
+  #         Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+  #         Properties:
+  #           Path: /hello
+  #           Method: get
+
+Outputs:
+  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
+  # Find out more about other implicit resources you can reference within SAM
+  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
+  # SocketIOApi:
+  #   Description: "API Gateway endpoint URL for Prod stage for Hello World function"
+  #   Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/hello/"
+  # SocketIOFunction:
+  #   Description: "Hello World Lambda Function ARN"
+  #   Value: !GetAtt HelloWorldFunction.Arn
+  # SocketIOFunctionIamRole:
+  #   Description: "Implicit IAM Role created for Hello World function"
+  #   Value: !GetAtt HelloWorldFunctionRole.Arn
+
+  OnConnectFunctionArn:
+    Description: "On Connect function ARN"
+    Value: !GetAtt OnConnectFunction.Arn
+  
+  OnDisconnectFunctionArn:
+    Description: "On Disconnect function ARN"
+    Value: !GetAtt OnDisconnectFunction.Arn
+
+  SendMessageFunctionArn:
+    Description: "Send Message Function ARN"
+    Value: !GetAtt SendMessageFunction.Arn
+
+  GetConnectionIdFunctionArn:
+    Description: "get connection id function arn"
+    Value: !GetAtt GetConnectionIdFunction.Arn
+
+  # OnDefaultFunctionArn:
+  #   Description: "On default function ARN"
+  #   Value: !GetAtt OnDefaultFunction.Arn
+
+  WebSocketURI:
+    Description: "The WSS protocol to connect to"
+    Value: !Join ['', ['wss://', !Ref SocketIOApp, '.execute-api.', !Ref 'AWS::Region', '.amazonaws.com/', !Ref 'Stage'] ]
+    
